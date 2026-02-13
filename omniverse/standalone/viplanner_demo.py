@@ -142,6 +142,18 @@ def main():
         goal_cam_frame = viplanner.goal_transformer(
             goals, obs["planner_transform"]["cam_position"], obs["planner_transform"]["cam_orientation"]
         )
+
+        # ------------------------------------------------------------------
+        # [18744] Accessing Sensor Data
+        # ------------------------------------------------------------------
+        raw_depth = obs["planner_image"]["depth_measurement"]               # Shape: [Num_Envs, H, W]
+        raw_semantic = obs["planner_image"]["semantic_measurement"]         # Shape: [Num_Envs, H, W]
+        raw_cam_position = obs["planner_transform"]["cam_position"]         # Shape: [Num_Envs, 3]
+        raw_cam_orientation = obs["planner_transform"]["cam_orientation"]   # Shape: [Num_Envs, 4]
+        # Example: d_lite_path = dstart_lite(raw_depth, raw_semantic, goal_cam_frame)
+        # ------------------------------------------------------------------
+
+        # [18744] run neurak network planner, output path
         _, paths, fear = viplanner.plan_dual(
             obs["planner_image"]["depth_measurement"], obs["planner_image"]["semantic_measurement"], goal_cam_frame
         )
@@ -149,6 +161,16 @@ def main():
         paths = viplanner.path_transformer(
             paths, obs["planner_transform"]["cam_position"], obs["planner_transform"]["cam_orientation"]
         )
+
+        # ------------------------------------------------------------------
+        # [18744] Path Post-Processing for Isaac Sim Demo
+        #
+        # The `paths` variable here contains the final world-frame waypoints
+        # before they are sent to the robot controller in the next loop iteration.
+        # Possible place for the CHECKER.
+        #
+        # Example: paths = checker(paths, d_lit_path)
+        # ------------------------------------------------------------------
 
         # draw path
         viplanner.debug_draw(paths, fear, goals)
