@@ -30,6 +30,8 @@
 
 // \author: Blaise Gassend
 
+// [18744] only use if running in realworld (attach joystick)
+
 #include <memory>
 #include <string>
 

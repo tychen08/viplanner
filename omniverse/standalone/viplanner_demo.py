@@ -10,6 +10,8 @@ This script demonstrates how to use the rigid objects class.
 
 """Launch Isaac Sim Simulator first."""
 
+# [18744] IssacSim
+
 import argparse
 
 # omni-isaac-lab
@@ -37,6 +39,7 @@ simulation_app = app_launcher.app
 import omni.isaac.core.utils.prims as prim_utils
 import torch
 from omni.isaac.core.objects import VisualCuboid
+# [18744] interface with renderer
 from omni.isaac.lab.envs import ManagerBasedRLEnv
 from omni.viplanner.config import (
     ViPlannerCarlaCfg,
@@ -68,6 +71,7 @@ def main():
         raise NotImplementedError(f"Scene {args_cli.scene} not yet supported!")
 
     # create environment
+    # [18744] env : interface to Isaac Sim environment
     env = ManagerBasedRLEnv(env_cfg)
 
     # adjust the intrinsics of the camera
@@ -82,6 +86,7 @@ def main():
             prim_utils.get_prim_at_path("/World/GroundPlane").GetAttribute("visibility").Set(UsdGeom.Tokens.invisible)
         )
 
+    # [18744] obs: dictionary contains the raw sensor data from the simulator
     # reset the environment
     with torch.inference_mode():
         obs = env.reset()[0]
@@ -111,13 +116,15 @@ def main():
     )
 
     # Simulate physics
+    # [18744] main logic: get sensor data, runs the planner and sends the resulting path as the next action
     while simulation_app.is_running():
         with torch.inference_mode():
             # If simulation is paused, then skip.
             if not env.sim.is_playing():
                 env.sim.step(render=~args_cli.headless)
                 continue
-
+            # [18744] previous action used as the action in this moment for the robot
+            # [18744] put action into render (source: ViPlannerMatterportCfg)
             obs = env.step(action=paths.view(paths.shape[0], -1))[0]
 
         # apply planner
@@ -131,13 +138,14 @@ def main():
             )
             env.sim.pause()
             continue
-
+        # [18744] transfer into camera's position
         goal_cam_frame = viplanner.goal_transformer(
             goals, obs["planner_transform"]["cam_position"], obs["planner_transform"]["cam_orientation"]
         )
         _, paths, fear = viplanner.plan_dual(
             obs["planner_image"]["depth_measurement"], obs["planner_image"]["semantic_measurement"], goal_cam_frame
         )
+        # [18744] convert waypoints from the camera's frame into the world's coordinate frame
         paths = viplanner.path_transformer(
             paths, obs["planner_transform"]["cam_position"], obs["planner_transform"]["cam_orientation"]
         )

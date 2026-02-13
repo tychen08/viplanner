@@ -564,6 +564,7 @@ class Trainer:
                     wp_viz.append(waypoints.cpu())
                     image_viz.append(image.cpu())
 
+            # [18744] send waypoints to visulization (VizTrajectory, VizImages)
             if is_visual:
                 preds_viz = torch.vstack(preds_viz)
                 wp_viz = torch.vstack(wp_viz)
