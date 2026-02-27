@@ -49,6 +49,9 @@ from omni.viplanner.config import (
 from omni.viplanner.viplanner import VIPlannerAlgo
 from pxr import UsdGeom
 
+
+from get_d_star_path import get_d_star_path
+
 """
 Main
 """
@@ -150,7 +153,10 @@ def main():
         raw_semantic = obs["planner_image"]["semantic_measurement"]         # Shape: [Num_Envs, H, W]
         raw_cam_position = obs["planner_transform"]["cam_position"]         # Shape: [Num_Envs, 3]
         raw_cam_orientation = obs["planner_transform"]["cam_orientation"]   # Shape: [Num_Envs, 4]
-        # Example: d_lite_path = dstart_lite(raw_depth, raw_semantic, goal_cam_frame)
+        
+        # [18744] Run D* Lite Planner
+        # Using the first environment's data (index 0) for the demo
+        d_lite_path_cam = get_d_star_path(raw_depth[0], goal_cam_frame[0], depth_intrinsic)
         # ------------------------------------------------------------------
 
         # [18744] run neurak network planner, output path
@@ -170,6 +176,11 @@ def main():
         # Possible place for the CHECKER.
         #
         # Example: paths = checker(paths, d_lit_path)
+        
+        # [18744] Transform D* Lite path to world frame
+        d_lite_path_world = viplanner.path_transformer(
+            d_lite_path_cam.unsqueeze(0), raw_cam_position[0:1], raw_cam_orientation[0:1]
+        )
         # ------------------------------------------------------------------
 
         # draw path
