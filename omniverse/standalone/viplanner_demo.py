@@ -51,6 +51,7 @@ from pxr import UsdGeom
 
 
 from get_d_star_path import get_d_star_path
+from headless_visualizer import HeadlessVisualizer
 
 """
 Main
@@ -61,6 +62,7 @@ def main():
     """Imports all legged robots supported in IsaacLab and applies zero actions."""
 
     # create environment cfg
+    # [18744] set goal position for each scene, make sure it's within the max_goal_distance defined in the training config of the model
     if args_cli.scene == "matterport":
         env_cfg = ViPlannerMatterportCfg(seed=1234)
         goal_pos = torch.tensor([8.0, -13.5, 1.0])
@@ -110,6 +112,25 @@ def main():
 
     # load viplanner
     viplanner = VIPlannerAlgo(model_dir=args_cli.model_dir, device=env.device)
+
+    # Initialize headless visualizer for path data capture
+    headless_viz = HeadlessVisualizer(
+        output_dir="./headless_viz_output",
+        window_size=(1024, 1024),
+        save_images=True,  # Save frames to disk
+    )
+    
+    # Save metadata about the session
+    metadata = {
+        "scene": args_cli.scene,
+        "model_dir": args_cli.model_dir or "default",
+        "conv_distance": args_cli.conv_distance,
+        "mode": "headless" if args_cli.headless else "gui",
+    }
+    headless_viz.save_metadata(metadata)
+    
+    # Get camera intrinsics for visualization
+    depth_intrinsic_viz = depth_intrinsic.clone()
 
     goals = torch.tensor(goal_pos.Get(), device=env.device).repeat(env.num_envs, 1)
 
@@ -215,8 +236,40 @@ def main():
                 is_fear_reaction = False
         # ------------------------------------------------------------------
 
-        # draw path
-        viplanner.debug_draw(paths, fear, goals)
+        # Visualization: Works in both headless and GUI modes
+        if args_cli.headless:
+            # Headless mode: Capture path data and generate visualizations with pygame
+            fear_value = fear[0].item() if fear.numel() > 0 else 0.0
+            
+            # Visualize the planning step
+            viz_image = headless_viz.visualize_step(
+                depth_map=raw_depth[0],
+                paths=paths[0],
+                d_lite_path=d_lite_path_world[0],
+                goal_pos=goals[0],
+                camera_pos=raw_cam_position[0],
+                camera_intrinsic=depth_intrinsic_viz,
+                fear_value=fear_value,
+                is_stuck=is_fear_reaction,
+                display=False,  # Set to True if you want pygame window display
+            )
+            
+            # Get path data as dictionary for logging/analysis
+            path_data = headless_viz.get_path_data(
+                paths[0], d_lite_path_world[0], goals[0], raw_cam_position[0]
+            )
+            print(f"[Frame {headless_viz.frame_count}] Path data saved and visualized")
+        else:
+            # GUI mode: Use Isaac Sim renderer
+            viplanner.debug_draw(paths, fear, goals)
+            # Draw D* Lite path in Blue (using a temporary fear value of 0 for color)
+            viplanner.debug_draw(d_lite_path_world, torch.zeros(1, 1, device=env.device), goals)
+
+    # Cleanup: Close visualizer and save data logs
+    if args_cli.headless:
+        print("[Info] Saving data logs...")
+        headless_viz.close()
+        print("[Info] Data logs saved successfully")
 
 
 if __name__ == "__main__":
