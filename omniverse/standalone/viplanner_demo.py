@@ -118,6 +118,11 @@ def main():
         obs["planner_image"]["depth_measurement"], obs["planner_image"]["semantic_measurement"], goals
     )
 
+    # [18744] Fear reaction tracking for stuck detection
+    fear_buffer = 0
+    buffer_size = 3  # Number of consecutive high-fear frames to trigger reaction
+    is_fear_reaction = False
+
     # Simulate physics
     # [18744] main logic: get sensor data, runs the planner and sends the resulting path as the next action
     while simulation_app.is_running():
@@ -181,6 +186,33 @@ def main():
         d_lite_path_world = viplanner.path_transformer(
             d_lite_path_cam.unsqueeze(0), raw_cam_position[0:1], raw_cam_orientation[0:1]
         )
+
+        # ------------------------------------------------------------------
+        # [18744] Fear Reaction Detection (Stuck/Unsafe Path Detection)
+        # ------------------------------------------------------------------
+        # Check if the path has high fear (potentially unsafe/stuck)
+        fear_value = fear[0].item() if fear.numel() > 0 else 0.0
+        
+        # Update fear buffer (similar to ROS implementation)
+        if fear_value > 0.7:
+            fear_buffer = min(fear_buffer + 1, buffer_size + 1)
+            print(f"[WARNING]: High fear detected: {fear_value:.3f} (buffer: {fear_buffer}/{buffer_size})")
+        else:
+            fear_buffer = max(fear_buffer - 1, 0)
+        
+        # Trigger fear reaction if buffer exceeds threshold
+        if fear_buffer > buffer_size:
+            if not is_fear_reaction:
+                print(f"[STUCK DETECTED]: Fear threshold exceeded! Switching to D* Lite fallback planner.")
+                print(f"[STUCK DETECTED]: Fear value: {fear_value:.3f}")
+                is_fear_reaction = True
+            # [18744] FALLBACK: Use D* Lite path when neural network is uncertain
+            paths = d_lite_path_world
+            print(f"[FALLBACK]: Using D* Lite path instead of neural network path")
+        elif fear_buffer <= 0:
+            if is_fear_reaction:
+                print(f"[RECOVERY]: Fear subsided, resuming neural network planner.")
+                is_fear_reaction = False
         # ------------------------------------------------------------------
 
         # draw path
