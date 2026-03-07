@@ -15,7 +15,7 @@ from omni.isaac.lab.managers import SceneEntityCfg
 from omni.isaac.lab.managers import TerminationTermCfg as DoneTerm
 from omni.isaac.lab.utils import configclass
 from omni.isaac.lab.utils.assets import ISAACLAB_NUCLEUS_DIR
-
+#from omni.viplanner.viplanner.mdp.actions.navigation_actions import NavigationActionCfg, LimoDiffDriveActionCfg
 ##
 # MDP settings
 ##
@@ -33,12 +33,15 @@ class ActionsCfg:
     paths = mdp.NavigationActionCfg(
         asset_name="robot",
         low_level_decimation=4,
-        low_level_action=mdp.JointPositionActionCfg(
-            asset_name="robot", joint_names=[".*"], scale=0.5, use_default_offset=True
+        low_level_action=mdp.LimoDiffDriveActionCfg(
+            asset_name="robot",
+            left_wheel_joint_names=["front_left_wheel", "rear_left_wheel"],
+            right_wheel_joint_names=["front_right_wheel", "rear_right_wheel"],
+            wheel_radius=0.025,
+            track_width=0.16,
         ),
-        low_level_policy_file=os.path.join(ISAACLAB_NUCLEUS_DIR, "Policies", "ANYmal-C", "HeightScan", "policy.pt"),
+        low_level_policy_file=None,   # IMPORTANT: disables ANYmal policy
     )
-
 
 @configclass
 class ObservationsCfg:
@@ -109,7 +112,7 @@ class TerminationsCfg:
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
     base_contact = DoneTerm(
         func=mdp.illegal_contact,
-        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names="base"), "threshold": 1.0},
+        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names="chassis_link"), "threshold": 1.0},
     )
     goal_reached = DoneTerm(func=mdp.at_goal, params={"distance_threshold": 0.3})
 
@@ -152,10 +155,11 @@ class CommandsCfg:
 
     vel_command: mdp.PathFollowerCommandGeneratorCfg = mdp.PathFollowerCommandGeneratorCfg(
         robot_attr="robot",
-        lookAheadDistance=1.0,
+        lookAheadDistance=0.7, #I am changing lookahead distance
         debug_vis=True,
-        maxSpeed=1.0,
+        maxSpeed=2,
     )
+    
 
 
 ##
