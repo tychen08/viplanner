@@ -282,6 +282,7 @@ class VIPlannerNode:
                     rospy.loginfo("Goal Arrived")
 
                 # check for path with high risk (=fear) path
+                # [18744] The fear value is predicted by the model and indicates the risk level of the current path. The threshold for fear reaction can be adjusted based on the specific use case and safety requirements.
                 if fear > 0.7:
                     self.is_fear_reaction = True
                     is_track_ahead = self.isForwardTraking(waypoints)

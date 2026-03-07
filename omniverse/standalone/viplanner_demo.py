@@ -193,6 +193,9 @@ def main():
         paths = viplanner.path_transformer(
             paths, obs["planner_transform"]["cam_position"], obs["planner_transform"]["cam_orientation"]
         )
+        
+        # [DEBUG] Print path end to compare with NavigationAction target
+        print(f"[Demo] Path End (World): {paths[0, -1, :2].cpu().numpy()}")
 
         # ------------------------------------------------------------------
         # [18744] Path Post-Processing for Isaac Sim Demo
