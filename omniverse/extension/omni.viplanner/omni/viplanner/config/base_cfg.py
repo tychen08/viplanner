@@ -33,12 +33,13 @@ class ActionsCfg:
     paths = mdp.NavigationActionCfg(
         asset_name="robot",
         low_level_decimation=4,
-        low_level_action=mdp.LimoDiffDriveActionCfg(
+        low_level_action=mdp.AckermannActionCfg(
             asset_name="robot",
-            left_wheel_joint_names=["front_left_wheel", "rear_left_wheel"],
-            right_wheel_joint_names=["front_right_wheel", "rear_right_wheel"],
-            wheel_radius=0.025,
-            track_width=0.16,
+            # [TODO] Replace these with your Fork Car's actual joint names!
+            drive_joint_names=["rear_left_wheel_joint", "rear_right_wheel_joint"], 
+            steering_joint_names=["front_left_steer_joint", "front_right_steer_joint"],
+            wheel_radius=0.1, # Measure your wheel radius in meters
+            max_steering_angle=0.6, # ~35 degrees
         ),
         low_level_policy_file=None,   # IMPORTANT: disables ANYmal policy
     )

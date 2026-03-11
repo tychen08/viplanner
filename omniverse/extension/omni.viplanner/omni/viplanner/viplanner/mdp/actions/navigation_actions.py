@@ -146,9 +146,11 @@ class NavigationAction(ActionTerm):
                 v_raw = torch.clamp(2.0 * x_err, 0.0, 1.0) 
                 w_raw = torch.clamp(5.0 * angle_error, -2.0, 2.0)
                 
-                # 如果角度大於 0.5 弧度 (約 28 度)，原地轉向不前進
-                turn_in_place = torch.abs(angle_error) > 0.5
-                v_cmd = torch.where(turn_in_place, torch.zeros_like(v_raw), v_raw)
+                # [Modified for Car/Forklift] Disable turn-in-place
+                # Cars cannot turn without moving, so we must allow forward motion even if angle is large.
+                # turn_in_place = torch.abs(angle_error) > 0.5
+                # v_cmd = torch.where(turn_in_place, torch.zeros_like(v_raw), v_raw)
+                v_cmd = v_raw
                 omega_cmd = w_raw
                 
                 if self._debug_counter % 20 == 0:
@@ -223,3 +225,60 @@ class LimoDiffDriveActionCfg(ActionTermCfg):
     right_wheel_joint_names: list[str] = MISSING
     wheel_radius: float = MISSING
     track_width: float = MISSING
+
+
+class AckermannAction(ActionTerm):
+    """Action term for an Ackermann drive robot (e.g. Car/Forklift)."""
+    cfg: AckermannActionCfg
+    _env: ManagerBasedRLEnv
+
+    def __init__(self, cfg: AckermannActionCfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self.robot = env.scene[cfg.asset_name]
+        
+        # Find joints
+        self.drive_joint_ids, _ = self.robot.find_joints(cfg.drive_joint_names)
+        self.steering_joint_ids, _ = self.robot.find_joints(cfg.steering_joint_names)
+        
+        self._action_dim = 2 # [v, steering]
+        self._raw_actions = torch.zeros(self.num_envs, self._action_dim, device=self.device)
+        
+        # Buffers for targets
+        self._joint_vel_targets = torch.zeros_like(self.robot.data.joint_vel_target)
+        self._joint_pos_targets = torch.zeros_like(self.robot.data.joint_pos_target)
+
+    @property
+    def action_dim(self) -> int: return self._action_dim
+    @property
+    def raw_actions(self) -> torch.Tensor: return self._raw_actions
+    @property
+    def processed_actions(self) -> torch.Tensor: return self._raw_actions
+
+    def process_actions(self, actions: torch.Tensor):
+        self._raw_actions[:] = actions
+        v_cmd = actions[:, 0]
+        steering_cmd = actions[:, 1]
+        
+        # 1. Drive Control (Velocity) -> Convert m/s to rad/s
+        wheel_vel = v_cmd / self.cfg.wheel_radius
+        
+        # 2. Steering Control (Position) -> Clamp angle
+        steering_pos = torch.clamp(steering_cmd, -self.cfg.max_steering_angle, self.cfg.max_steering_angle)
+        
+        self._joint_vel_targets[:] = 0.0
+        for idx in self.drive_joint_ids: self._joint_vel_targets[:, idx] = wheel_vel
+        for idx in self.steering_joint_ids: self._joint_pos_targets[:, idx] = steering_pos
+
+    def apply_actions(self):
+        # [FIX] Slice the tensor to match the specific joint IDs
+        self.robot.set_joint_velocity_target(self._joint_vel_targets[:, self.drive_joint_ids], joint_ids=self.drive_joint_ids)
+        self.robot.set_joint_position_target(self._joint_pos_targets[:, self.steering_joint_ids], joint_ids=self.steering_joint_ids)
+
+@configclass
+class AckermannActionCfg(ActionTermCfg):
+    class_type: type[ActionTerm] = AckermannAction
+    asset_name: str = "robot"
+    drive_joint_names: list[str] = MISSING
+    steering_joint_names: list[str] = MISSING
+    wheel_radius: float = 0.1
+    max_steering_angle: float = 0.6 # rad (~35 degrees)
